@@ -12,7 +12,7 @@ module AirVideo
   #
   # Setting #max_height and #max_width *should* be working with the Live Conversion, but for some reason it's not quite happening. Defaults are 640x480
   class Client
-    attr_accessor :max_hieght, :max_width
+    attr_accessor :max_height, :max_width
     
     # Specify where your AirVideo Server lives. If your HTTP_PROXY environment variable is set, it will be honoured.
     #
@@ -45,7 +45,7 @@ module AirVideo
     def ls(dir = ".")
       dir = File.expand_path(dir,@current_dir)[1..-1]
       dir = nil if dir == ""
-      #begin
+      begin
         request("browseService","getItems",[dir])['result']['items'].collect do |hash|
           case hash.name
           when "air.video.DiskRootFolder", "air.video.ITunesRootFolder","air.video.Folder"
@@ -56,9 +56,9 @@ module AirVideo
             raise NotImplementedError, "Unknown: #{hash.name}"
           end
         end
-      #rescue NoMethodError
-      #  raise RuntimeError, "This folder does not exist"
-      #end
+      rescue NoMethodError
+        raise RuntimeError, "This folder does not exist"
+      end
     end
     
     # Changes to the given directory. Will accept an AirVideo::FolderObject or a string.
