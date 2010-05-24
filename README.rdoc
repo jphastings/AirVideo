@@ -5,11 +5,37 @@ that not only have I bought the iPhone and iPad apps, I'd also love to be able t
 Me too! So I reverse engineered their communication protocol and came up with this. It's a little hacky (and it's certainly not been tested outside of Mac OS X 10.6)
 but it will give you the Streamable and Playable URLs of the videos on your AirVideo server from Ruby.
 
+== Care & Share
+I know you know this, but the guys at InMethod don't charge for their server. Purchases of their iPhone and iPad apps are how they get rewarded for their (epic, as I'm sure you'll agree) efforts.
+
+Please, buy their apps if you haven't already, and send them an email or a forum post saying how much you love their software. If you're a member of InMethod, come to Nottingham in the UK - I'll buy you a pint.
+
 == Usage
 I'd like to be able to write a shiny GUI for all this, but alas, I am crap at the GUI. So as it stands you'll need to do this:
 
     my_vids = AirVideo::Client.new('me.dyndns.org',45631,'YOUR PASSWORD')
     # => <AirVideo Connection: me.dyndns.org:45631>
     my_vids.ls
+    # => [<Folder: TV Shows>, <Folder: Movies>, <Folder: Music Videos>]
+    my_vids.ls[2].cd
+
+    # Bear in mind that the AirVideo::Client instance keeps track of where you are, like a console.
+    my_vids.ls
+    # => [<Video: Star Guitar>, <Video: A Glorious Dawn>, <Video: Stylo (Featuring Mos Def & Bobby Womack)>]
+
+    sagan = my_vids.ls[1]
+    # => <Video: A Glorious Dawn>
+    # Now you can select a video and get the streaming URL
+    sagan.url
+    # => "http://me.dyndns.org:45631/path_to_your.m4v"
+    
+    # You can also specify (basic, for now) details as to how you want that file live transcoded to you!
+    my_vids.max_width = 640
+    my_vids.max_height = 480
+    sagan.live_url
+    # => "http://me.dyndns.org:45631/path_to_your_live_converting_resized.m4v"
+    
+    # On a mac you can do this, but I'm sure you handsome folk can figure out how to do something similar on other OSes.
+    `open -a "QuickTime Player" "#{sagan.url}"`
 
 If you have the ENV['HTTP_PROXY'] variable set (to something like 'myproxy.com:8080') then everything will be piped through there too.
