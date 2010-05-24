@@ -1,5 +1,5 @@
 = AirVideo for Ruby
-Have you ever thought to yourself: I have AirVideo (http://www.inmethod.com/air-video/index.html) running on my computer and I enjoy it so much
+Have you ever thought to yourself: I have AirVideo (http://www.inmethod.com/air-video/) running on my computer and I enjoy it so much
 that not only have I bought the iPhone and iPad apps, I'd also love to be able to watch my video on my laptop too?
 
 Me too! So I reverse engineered their communication protocol and came up with this. It's a little hacky (and it's certainly not been tested outside of Mac OS X 10.6)
