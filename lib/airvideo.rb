@@ -1,5 +1,6 @@
 require 'net/http'
 require 'stringio'
+require 'digest/sha1'
 
 # == TODO
 # * Potential bug: can you cd into a file?
@@ -17,8 +18,6 @@ module AirVideo
     # Specify where your AirVideo Server lives. If your HTTP_PROXY environment variable is set, it will be honoured.
     #
     # At the moment I'm expecting ENV['HTTP_PROXY'] to have the form 'sub.domain.com:8080', I throw an http:// and bung it into URI.parse for convenience.
-    #
-    # I haven't currently worked out what the AirVideo salt is (or even confirmed that it is SHA1) so you'll need to snoop your own passwordDigest and pass it into the last term, or not use one for now.
     def initialize(server,port = 45631,password=nil)
       if ENV['HTTP_PROXY'].nil?
         @http = Net::HTTP
@@ -27,7 +26,7 @@ module AirVideo
         @http = Net::HTTP::Proxy(proxy.host, proxy.port)
       end
       @endpoint = URI.parse "http://#{server}:#{port}/service"
-      @passworddigest = password
+      @passworddigest = Digest::SHA1.hexdigest("S@17" + password + "@1r").upcase if !password.nil?
       
       @req = Net::HTTP::Post.new(@endpoint.path)
       @req['User-Agent'] = 'AirVideo/2.2.4 CFNetwork/459 Darwin/10.0.0d3'
