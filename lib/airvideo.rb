@@ -42,6 +42,7 @@ module AirVideo
     
     # Lists the folders and videos in the current directory as an Array of AirVideo::FileObject and AirVideo::FolderObject objects.
     def ls(dir = ".")
+      dir = dir.location if dir.is_a? FolderObject
       dir = File.expand_path(dir,@current_dir)[1..-1]
       dir = nil if dir == ""
       begin
@@ -166,6 +167,11 @@ module AirVideo
       # A helper method that will move the current directory of the AirVideo::Client instance to this FolderObject.
       def cd
         @server.cd(self)
+      end
+      
+      # A helper method that will list the contents of this directory.
+      def ls
+        @server.ls(self)
       end
 
       def inspect
