@@ -1,0 +1,22 @@
+= AirVideo for Ruby
+Have you ever thought to yourself: I have AirVideo (http://www.inmethod.com/air-video/index.html) running on my computer and I enjoy it so much
+that not only have I bought the iPhone and iPad apps, I'd also love to be able to watch my video on my laptop too?
+
+Me too! So I reverse engineered their communication protocol and came up with this. It's a little hacky (and it's certainly not been tested outside of Mac OS X 10.6)
+but it will give you the Streamable and Playable URLs of the videos on your AirVideo server from Ruby.
+
+== Usage
+I'd like to be able to write a shiny GUI for all this, but alas, I am crap at the GUI. So as it stands you'll need to do this:
+
+    my_vids = AirVideo::Client.new('me.dyndns.org',45631,'01234_PASSWORD_DIGEST_SEE_BELOW_5678')
+    # => <AirVideo Connection: me.dyndns.org:45631>
+    my_vids.ls
+
+== Passwords
+If you've ever played with storing passwords you'll know about cryptographic hashing and using salts.
+
+Essentially when you store a password, you don't store the actual password, you store the result of a cryptographic algorithm acting on the password and a string unique to your project (your salt). This means that people can't find out what the passwords are and won't be given access unless they know both the password *and* the salt.
+
+As it currently stands I don't know the salt for the AirVideo system. I think it's an SHA1 algorithm, but there's no real way to know unless I know the salt or reverse engineer their server or iPhone app. That's a little over my head, so instead if you want to use a password on your AirVideo server you'll need to hunt down your password digest.
+
+This gist: http://gist.github.com/412133 will tell you what your passwordDigest is for you. You'll need the pcap libraries and gem installed, as well as read access to the device you're serving AirVideo from.
