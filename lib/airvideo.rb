@@ -116,7 +116,7 @@ module AirVideo
       AvMap::Hash.new("air.video.ConversionRequest", {
         "itemId" => fileobj.location[1..-1],
         "audioStream"=>1,
-        "allowedBitrates"=> BitrateList["512", "768", "1536", "1024", "384", "1280", "256"],
+        "allowedBitrates"=> AirVideo::AvMap::BitrateList["512", "768", "1536", "1024", "384", "1280", "256"],
         "audioBoost"=>0.0,
         "cropRight"=>0,
         "cropLeft"=>0,
