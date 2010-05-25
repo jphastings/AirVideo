@@ -19,11 +19,11 @@ module AirVideo
     #
     # At the moment I'm expecting ENV['HTTP_PROXY'] to have the form 'sub.domain.com:8080', I throw an http:// and bung it into URI.parse for convenience.
     def initialize(server,port = 45631,password=nil)
-      if ENV['HTTP_PROXY'].nil?
-        @http = Net::HTTP
-      else
+      begin
         proxy = URI.parse("http://"+ENV['HTTP_PROXY'])
         @http = Net::HTTP::Proxy(proxy.host, proxy.port)
+      rescue
+        @http = Net::HTTP
       end
       @endpoint = URI.parse "http://#{server}:#{port}/service"
       @passworddigest = Digest::SHA1.hexdigest("S@17" + password + "@1r").upcase if !password.nil?
