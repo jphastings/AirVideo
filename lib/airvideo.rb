@@ -14,17 +14,13 @@ module AirVideo
   # Setting #max_height and #max_width *should* be working with the Live Conversion, but for some reason it's not quite happening. Defaults are 640x480
   class Client
     attr_accessor :max_height, :max_width
+    attr_reader :proxy
     
     # Specify where your AirVideo Server lives. If your HTTP_PROXY environment variable is set, it will be honoured.
     #
     # At the moment I'm expecting ENV['HTTP_PROXY'] to have the form 'sub.domain.com:8080', I throw an http:// and bung it into URI.parse for convenience.
     def initialize(server,port = 45631,password=nil)
-      begin
-        proxy = URI.parse("http://"+ENV['HTTP_PROXY'])
-        @http = Net::HTTP::Proxy(proxy.host, proxy.port)
-      rescue
-        @http = Net::HTTP
-      end
+      set_proxy # Set to environment proxy settings, if applicable
       @endpoint = URI.parse "http://#{server}:#{port}/service"
       @passworddigest = Digest::SHA1.hexdigest("S@17" + password + "@1r").upcase if !password.nil?
       
@@ -38,6 +34,22 @@ module AirVideo
       
       @max_width  = 640
       @max_height = 480
+    end
+    
+    # Potentially confusing: 
+    # * Sending 'server:port' will use that address as an HTTP proxy
+    # * An empty string (or something not recognisable as a URL with http:// put infront of it) will try to use the ENV['HTTP_PROXY'] variable
+    # * Sending nil or any object that can't be parsed to a string will remove the proxy
+    #
+    # NB. You can access the @proxy URI object externally, but changing it will *not* automatically call set_proxy
+    def set_proxy(proxy_server_and_port = "")
+      begin
+        @proxy = URI.parse("http://"+((proxy_server_and_port.empty?) ? ENV['HTTP_PROXY'] : string_proxy))
+        @http = Net::HTTP::Proxy(@proxy.host, @proxy.port)
+      rescue
+        @proxy = nil
+        @http = Net::HTTP
+      end
     end
     
     # Lists the folders and videos in the current directory as an Array of AirVideo::FileObject and AirVideo::FolderObject objects.
@@ -158,7 +170,7 @@ module AirVideo
       attr_reader :name, :location
 
       # Shouldn't be used outside of the AirVideo module
-      def initialize(server,name,location)
+      def initialize(server,name,location) # :nodoc:
         @server = server
         @name = name
         @location = "/"+location
@@ -185,7 +197,8 @@ module AirVideo
     class FileObject
       attr_reader :name, :location, :details
 
-      def initialize(server,name,location,detail = {})
+      # Shouldn't be used outside of the AirVideo module
+      def initialize(server,name,location,detail = {}) # :nodoc:
         @server = server
         @name = name
         @location = "/"+location
@@ -301,8 +314,8 @@ module AirVideo
     class BinaryData
       attr_reader :data
 
-      # Not to be used outside of the AvMap module
-      def initialize(data)
+      # Not really useful outside of the AvMap module
+      def initialize(data) # :nodoc:
         @data = data
       end
 
