@@ -52,7 +52,7 @@ module AirVideo
       end
     end
     
-    # Lists the folders and videos in the current directory as an Array of AirVideo::FileObject and AirVideo::FolderObject objects.
+    # Lists the folders and videos in the current directory as an Array of AirVideo::VideoObject and AirVideo::FolderObject objects.
     def ls(dir = ".")
       dir = dir.location if dir.is_a? FolderObject
       dir = File.expand_path(dir,@current_dir)[1..-1]
@@ -63,7 +63,7 @@ module AirVideo
           when "air.video.DiskRootFolder", "air.video.ITunesRootFolder","air.video.Folder"
             FolderObject.new(self,hash['name'],hash['itemId'])
           when "air.video.VideoItem","air.video.ITunesVideoItem"
-            FileObject.new(self,hash['name'],hash['itemId'],hash['detail'] || {})
+            VideoObject.new(self,hash['name'],hash['itemId'],hash['detail'] || {})
           else
             raise NotImplementedError, "Unknown: #{hash.name}"
           end
@@ -85,9 +85,9 @@ module AirVideo
       self
     end
     
-    # Returns the streaming video URL for the given AirVideo::FileObject.
+    # Returns the streaming video URL for the given AirVideo::VideoObject.
     def get_url(fileobj,liveconvert = false)
-      raise NoMethodError, "Please pass a FileObject" if not fileobj.is_a? FileObject
+      raise NoMethodError, "Please pass a VideoObject" if not fileobj.is_a? VideoObject
       begin
         if liveconvert
           request("livePlaybackService","initLivePlayback",[conversion_settings(fileobj)])['result']['contentURL']
@@ -194,7 +194,7 @@ module AirVideo
     # Represents a video file as listed by the AirVideo server.
     #
     # Has helper functions like #url and #live_url which give the video playback URLs of this video, as produced by the originating AirVideo::Client instance's AirVideo::Client.get_url method.
-    class FileObject
+    class VideoObject
       attr_reader :name, :location, :details
 
       # Shouldn't be used outside of the AirVideo module
