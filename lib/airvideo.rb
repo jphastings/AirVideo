@@ -63,7 +63,7 @@ module AirVideo
           when "air.video.DiskRootFolder", "air.video.ITunesRootFolder","air.video.Folder"
             FolderObject.new(self,hash['name'],hash['itemId'])
           when "air.video.VideoItem","air.video.ITunesVideoItem"
-            VideoObject.new(self,hash['name'],hash['itemId'],hash['detail'] || {})
+            VideoObject.new(self,hash['name'],hash['itemId'],hash['detail'] || nil)
           else
             raise NotImplementedError, "Unknown: #{hash.name}"
           end
@@ -86,13 +86,13 @@ module AirVideo
     end
     
     # Returns the streaming video URL for the given AirVideo::VideoObject.
-    def get_url(fileobj,liveconvert = false)
-      raise NoMethodError, "Please pass a VideoObject" if not fileobj.is_a? VideoObject
+    def get_url(videoobj,liveconvert = false)
+      raise NoMethodError, "Please pass a VideoObject" if not videoobj.is_a? VideoObject
       begin
         if liveconvert
-          request("livePlaybackService","initLivePlayback",[conversion_settings(fileobj)])['result']['contentURL']
+          request("livePlaybackService","initLivePlayback",[conversion_settings(videoobj)])['result']['contentURL']
         else
-          request("playbackService","initPlayback",[fileobj.location[1..-1]])['result']['contentURL']
+          request("playbackService","initPlayback",[videoobj.location[1..-1]])['result']['contentURL']
         end
       rescue NoMethodError
         raise RuntimeError, "This video does not exist"
@@ -110,14 +110,8 @@ module AirVideo
     end
   
     private
-    def conversion_settings(fileobj)
-      video = {}
-      fileobj.details['streams'].each do |stream|
-        if stream['streamType'] == 0
-          video = stream
-          break
-        end
-      end
+    def conversion_settings(videoobj)
+      video = videoobj.video_stream
       scaling = [video['width'] / @max_width, video['height'] / @max_height]
       if scaling.max > 1.0
         video['width'] = video['width'] / scaling.max
@@ -126,14 +120,14 @@ module AirVideo
       
       # TODO: fill these in correctly
       AvMap::Hash.new("air.video.ConversionRequest", {
-        "itemId" => fileobj.location[1..-1],
-        "audioStream"=>1,
+        "itemId" => videoobj.location[1..-1],
+        "audioStream"=>videoobj.audio_stream['index'],
         "allowedBitrates"=> AirVideo::AvMap::BitrateList["512", "768", "1536", "1024", "384", "1280", "256"],
         "audioBoost"=>0.0,
         "cropRight"=>0,
         "cropLeft"=>0,
         "resolutionWidth"=>video['width'],
-        "videoStream"=>0,
+        "videoStream"=>video['index'],
         "cropBottom"=>0,
         "cropTop"=>0,
         "quality"=>0.699999988079071,
@@ -195,14 +189,58 @@ module AirVideo
     #
     # Has helper functions like #url and #live_url which give the video playback URLs of this video, as produced by the originating AirVideo::Client instance's AirVideo::Client.get_url method.
     class VideoObject
-      attr_reader :name, :location, :details
+      attr_reader :name, :location, :details, :streams
+      attr_accessor :audio_stream, :video_stream
 
       # Shouldn't be used outside of the AirVideo module
-      def initialize(server,name,location,detail = {}) # :nodoc:
+      def initialize(server,name,location,detail = nil) # :nodoc:
         @server = server
         @name = name
         @location = "/"+location
-        @details = detail
+        @details = detail # nil implies the details haven't been loaded
+        # These are the defaults, all videos *should* have these.
+        @video_stream = {'index' => 1}
+        @audio_stream = {'index' => 0}
+        get_details if !@details.nil?
+      end
+      
+      def get_details
+        # TODO: Retrieve the details from the server if not present
+        
+        if !@details.nil?
+          @streams = {'video' => [],'audio' => [],'unknown' => []}
+          @details['streams'].each do |stream|
+            @streams[case
+            when 0
+              "video"
+            when 1
+              "audio"
+            else
+              "unknown"
+            ]
+          end
+          @audio_stream = @details['streams'][0]
+          @video_stream = @details['streams'][0]
+        end
+        @details
+      end
+      
+      # Checks to see if this video has that audio stream index, then changes internal settings so that live conversions will use this stream.
+      def audio_stream=(stream_hash_or_index)
+        index = stream_hash_or_index['index'] rescue stream_hash_or_index
+        get_details if @details.nil?
+        raise RuntimeError, "Couldn't retrieve video details" if @details.nil?
+        raise RuntimeError, "No such audio stream" if @streams['audio'].collect{|stream| stream['index']}.include? index
+        @audio_stream = index
+      end
+      
+      # Checks to see if this video has that video stream index, then changes internal settings so that live conversions will use this stream.
+      def video_stream=(stream_hash_or_index)
+        index = stream_hash_or_index['index'] rescue stream_hash_or_index
+        get_details if @details.nil?
+        raise RuntimeError, "Couldn't retrieve video details" if @details.nil?
+        raise RuntimeError, "No such audio stream" if @streams['video'].collect{|stream| stream['index']}.include? index
+        @video_stream = index
       end
 
       # Gives the URL for direct video playback
