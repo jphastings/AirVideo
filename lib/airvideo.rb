@@ -4,6 +4,9 @@ require 'digest/sha1'
 
 # == TODO
 # * Potential bug: can you cd into a file?
+# * Caching for details?
+#   - Active-record?
+#   - In-memory by default
 
 module AirVideo
   # The AirVideo Client. At this stage it can emulate the iPhone app in all major features.
@@ -88,6 +91,7 @@ module AirVideo
     # Returns the streaming video URL for the given AirVideo::VideoObject.
     def get_url(videoobj,liveconvert = false)
       raise NoMethodError, "Please pass a VideoObject" if not videoobj.is_a? VideoObject
+      
       begin
         if liveconvert
           request("livePlaybackService","initLivePlayback",[conversion_settings(videoobj)])['result']['contentURL']
@@ -97,6 +101,27 @@ module AirVideo
       rescue NoMethodError
         raise RuntimeError, "This video does not exist"
       end
+    end
+    
+    def get_details(items)
+      items = [items] if !items.is_a? Array
+      items.collect! do |item|
+        case item
+        when VideoObject
+          item.location[1..-1]
+        when String
+          item
+        end
+      end.compact!
+      
+      request("browseService","getItemsWithDetail",[items])['result'][0]
+    end
+    
+    # Searches the current directory for items matching the given regular expression
+    def search(re_string,dir=".")
+      # Get the directory we're searching
+      dir = File.expand_path((dir.is_a? FolderObject) ? dir.location : dir,@current_dir)
+      ls(dir).select {|item| item.name =~ %r{#{re_string}}}
     end
     
     # Returns the path to the current directory
@@ -109,25 +134,25 @@ module AirVideo
       "<AirVideo Connection: #{@endpoint.host}:#{@endpoint.port}>"
     end
   
-    private
+    #private
     def conversion_settings(videoobj)
       video = videoobj.video_stream
       scaling = [video['width'] / @max_width, video['height'] / @max_height]
       if scaling.max > 1.0
-        video['width'] = video['width'] / scaling.max
-        video['height'] = video['height'] / scaling.max
+        video['width'] = (video['width'] / scaling.max).to_i
+        video['height'] = (video['height'] / scaling.max).to_i
       end
       
       # TODO: fill these in correctly
       AvMap::Hash.new("air.video.ConversionRequest", {
         "itemId" => videoobj.location[1..-1],
-        "audioStream"=>videoobj.audio_stream['index'],
+        "audioStream"=>1,#videoobj.audio_stream['index'],
         "allowedBitrates"=> AirVideo::AvMap::BitrateList["512", "768", "1536", "1024", "384", "1280", "256"],
         "audioBoost"=>0.0,
         "cropRight"=>0,
         "cropLeft"=>0,
         "resolutionWidth"=>video['width'],
-        "videoStream"=>video['index'],
+        "videoStream"=>0,#video['index'],
         "cropBottom"=>0,
         "cropTop"=>0,
         "quality"=>0.699999988079071,
@@ -162,6 +187,7 @@ module AirVideo
     # Has helper functions like #cd which will move the current directory of the originating AirVideo::Client instance to this folder.
     class FolderObject
       attr_reader :name, :location
+      Helpers = [:cd, :ls, :search]
 
       # Shouldn't be used outside of the AirVideo module
       def initialize(server,name,location) # :nodoc:
@@ -170,18 +196,20 @@ module AirVideo
         @location = "/"+location
       end
 
-      # A helper method that will move the current directory of the AirVideo::Client instance to this FolderObject.
+      def inspect
+        "<Folder: #{(name.nil?) ? "/Unknown/" : name}>"
+      end
+      
       def cd
         @server.cd(self)
       end
       
-      # A helper method that will list the contents of this directory.
       def ls
         @server.ls(self)
       end
-
-      def inspect
-        "<Folder: #{(name.nil?) ? "/Unknown/" : name}>"
+      
+      def search(re_string)
+        @server.search(re_string,self)
       end
     end
 
@@ -201,11 +229,11 @@ module AirVideo
         # These are the defaults, all videos *should* have these.
         @video_stream = {'index' => 1}
         @audio_stream = {'index' => 0}
-        get_details if !@details.nil?
+        details if !@details.nil?
       end
       
-      def get_details
-        # TODO: Retrieve the details from the server if not present
+      def details
+        #@details = @server.get_details(self)
         
         if !@details.nil?
           @streams = {'video' => [],'audio' => [],'unknown' => []}
@@ -217,6 +245,7 @@ module AirVideo
               "audio"
             else
               "unknown"
+            end
             ]
           end
           @audio_stream = @details['streams'][0]
@@ -275,59 +304,52 @@ module AirVideo
 
     private
     def self.read_identifier(depth = 0)
-      begin
-        ident = @input.read(1)
-        case ident
-        when "o" # Hash
-          unknown = @input.read(4).unpack("N")[0]
-          hash = Hash.new(@input.read(@input.read(4).unpack("N")[0]), {})
-          unknown = @input.read(4).unpack("N")[0]
-          num_els = @input.read(4).unpack("N")[0]
-          #$stderr.puts "#{" "*depth}Hash: #{arr_name} // #{num_els} times"
-          1.upto(num_els) do |iter|
-            hash_item = @input.read(@input.read(4).unpack("N")[0])
-            #$stderr.puts "#{" "*depth}-#{arr_name}:#{iter} - #{hash_item}"
-            hash[hash_item] = self.read_identifier(depth + 1)
-          end
-          hash
-        when "s" # String
-          #$stderr.puts "#{" "*depth}String"
-          unknown = @input.read(4).unpack("N")[0]
-          @input.read(@input.read(4).unpack("N")[0])
-        when "i" # Integer?
-          #$stderr.puts "#{" "*depth}Integer"
-          @input.read(4).unpack("N")[0]
-        when "a","e" # Array
-          #$stderr.puts "#{" "*depth}Array"
-          unknown = @input.read(4).unpack("N")[0]
-          num_els = @input.read(4).unpack("N")[0]
-          arr = []
-          1.upto(num_els) do |iter|
-            arr.push self.read_identifier(depth + 1)
-          end
-          arr
-        when "n" # nil
-          #$stderr.puts "#{" "*depth}Nil"
-          nil
-        when "f" # Float?
-          @input.read(8).unpack('G')[0]
-        when "l" # Big Integer
-          @input.read(8).unpack("NN").reverse.inject([0,0]){|res,el| [res[0] + (el << (32 * res[1])),res[1] + 1]}[0]
-        when "r" # Integer?
-          #$stderr.puts "#{" "*depth}R?"
-          @input.read(4).unpack("N")[0]
-        when "x" # Binary Data
-          #$stderr.puts "#{" "*depth}R?"
-          unknown = @input.read(4).unpack("N")[0]
-          BinaryData.new @input.read(@input.read(4).unpack("N")[0])
-        else
-          raise NotImplementedError, "I don't know what to do with the '#{ident}' identifier"
+      ident = @input.read(1)
+      case ident
+      when "o" # Hash
+        unknown = @input.read(4).unpack("N")[0]
+        hash = Hash.new(@input.read(@input.read(4).unpack("N")[0]), {})
+        unknown = @input.read(4).unpack("N")[0]
+        num_els = @input.read(4).unpack("N")[0]
+        #$stderr.puts "#{" "*depth}Hash: #{arr_name} // #{num_els} times"
+        1.upto(num_els) do |iter|
+          hash_item = @input.read(@input.read(4).unpack("N")[0])
+          #$stderr.puts "#{" "*depth}-#{arr_name}:#{iter} - #{hash_item}"
+          hash[hash_item] = self.read_identifier(depth + 1)
         end
-      rescue Exception => e
-        puts e.message  
-        puts "Error : #{@input.tell}"
-        p e.backtrace
-        Process.exit
+        hash
+      when "s" # String
+        #$stderr.puts "#{" "*depth}String"
+        unknown = @input.read(4).unpack("N")[0]
+        @input.read(@input.read(4).unpack("N")[0])
+      when "i" # Integer?
+        #$stderr.puts "#{" "*depth}Integer"
+        @input.read(4).unpack("N")[0]
+      when "a","e" # Array
+        #$stderr.puts "#{" "*depth}Array"
+        unknown = @input.read(4).unpack("N")[0]
+        num_els = @input.read(4).unpack("N")[0]
+        arr = []
+        1.upto(num_els) do |iter|
+          arr.push self.read_identifier(depth + 1)
+        end
+        arr
+      when "n" # nil
+        #$stderr.puts "#{" "*depth}Nil"
+        nil
+      when "f" # Float?
+        @input.read(8).unpack('G')[0]
+      when "l" # Big Integer
+        @input.read(8).unpack("NN").reverse.inject([0,0]){|res,el| [res[0] + (el << (32 * res[1])),res[1] + 1]}[0]
+      when "r" # Integer?
+        #$stderr.puts "#{" "*depth}R?"
+        @input.read(4).unpack("N")[0]
+      when "x" # Binary Data
+        #$stderr.puts "#{" "*depth}R?"
+        unknown = @input.read(4).unpack("N")[0]
+        BinaryData.new @input.read(@input.read(4).unpack("N")[0])
+      else
+        raise NotImplementedError, "I don't know what to do with the '#{ident}' identifier"
       end
     end
 
@@ -365,9 +387,13 @@ module AirVideo
           f.write @data
         end
       end
+      
+      def length
+        @data.length
+      end
 
       def inspect
-        "<Data: #{data.length} bytes>"
+        "<Data: #{@data.length} bytes>"
       end
     end
 
@@ -382,13 +408,13 @@ end
 class Object
   # Will convert an object into an AirVideo map, if the object and it's contents are supported
   def to_avmap(reset_counter = true)
-    $to_avmap_counter = 0 if reset_counter
+    @@to_avmap_counter = 0 if reset_counter
     
     case self
     when Array
       letter = (self.is_a? AirVideo::AvMap::BitrateList) ? "e" : "a"
       self.push nil if self.length == 0 # Must have at least one entry in the hash, I think
-      "#{letter}#{[($to_avmap_counter += 1) - 1].pack("N")}#{[self.length].pack("N")}"+self.collect do |item|
+      "#{letter}#{[(@@to_avmap_counter += 1) - 1].pack("N")}#{[self.length].pack("N")}"+self.collect do |item|
         item.to_avmap(false)
       end.join
     when AirVideo::AvMap::Hash
@@ -398,11 +424,13 @@ class Object
       else
         1
       end
-      "o#{[($to_avmap_counter += 1) - 1].pack("N")}#{[self.name.length].pack("N")}#{self.name}#{[version].pack("N")}#{[self.length].pack("N")}"+self.to_a.collect do |key,val|
+      "o#{[(@@to_avmap_counter += 1) - 1].pack("N")}#{[self.name.length].pack("N")}#{self.name}#{[version].pack("N")}#{[self.length].pack("N")}"+self.to_a.collect do |key,val|
         "#{[key.length].pack("N")}#{key}"+val.to_avmap(false)
       end.join
+    when AirVideo::AvMap::BinaryData
+      "x#{[(@@to_avmap_counter += 1) - 1].pack("N")}#{[self.length].pack("N")}#{self.data}"
     when String
-      "s#{[($to_avmap_counter += 1) - 1].pack("N")}#{[self.length].pack("N")}#{self}"
+      "s#{[(@@to_avmap_counter += 1) - 1].pack("N")}#{[self.length].pack("N")}#{self}"
     when NilClass
       "n"
     when Integer
