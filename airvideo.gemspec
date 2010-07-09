@@ -5,11 +5,11 @@
 
 Gem::Specification.new do |s|
   s.name = %q{airvideo}
-  s.version = "0.0.7"
+  s.version = "0.0.8"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["JP Hastings-Spital"]
-  s.date = %q{2010-05-26}
+  s.date = %q{2010-07-09}
   s.description = %q{Communicate with an AirVideo server, even through a proxy: Retrieve the streaming URLs for your videos.}
   s.email = %q{jphastings@gmail.com}
   s.extra_rdoc_files = [
@@ -21,6 +21,7 @@ Gem::Specification.new do |s|
      "README.rdoc",
      "Rakefile",
      "VERSION",
+     "airvideo.gemspec",
      "lib/airvideo.rb"
   ]
   s.homepage = %q{http://github.com/jphastings/AirVideo}
